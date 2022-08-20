@@ -1,0 +1,76 @@
+plugins {
+    id 'java'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+abstract class TestTransform implements TransformAction<Params>{
+    static interface Params extends TransformParameters {
+        @Input
+        long getThing()
+        void setThing(long val)
+    }
+
+    @InputArtifact
+    abstract Provider<FileSystemLocation> getInputArtifact()
+
+    @Override void transform(TransformOutputs outputs) {
+        println("transforming ${getInputArtifact().get()}")
+        outputs.file(getInputArtifact().get())
+    }
+}
+
+
+configurations {
+    newTestConf
+}
+def artifactType = Attribute.of('artifactType', String)
+def transformedAttribute = Attribute.of('transformed', Boolean)
+
+dependencies {
+    attributesSchema {
+        attribute(transformedAttribute)
+    }
+    artifactTypes.getByName("jar") {
+        attributes.attribute(transformedAttribute, false)
+    }
+}
+
+configurations.all {
+    if (canBeResolved) {
+        attributes.attribute(transformedAttribute, true)
+    }
+}
+
+dependencies {
+    registerTransform(TestTransform) {
+        from.attribute(transformedAttribute, false).attribute(artifactType, "jar")
+        to.attribute(transformedAttribute, true).attribute(artifactType, "jar")
+
+        parameters {
+            thing = System.nanoTime()
+        }
+    }
+}
+
+dependencies {
+    newTestConf project(":sub")
+}
+
+task newTestTask() {
+    dependsOn(configurations.newTestConf)
+    doLast {
+        configurations.newTestConf.resolve()
+    }
+}
+
+build.dependsOn(newTestTask)
+
+test {
+    useJUnitPlatform()
+}
